@@ -1,9 +1,13 @@
 package com.app.DistributedFractal;
 
 import java.awt.Color;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
 import java.util.LinkedList;
 import java.util.concurrent.CompletableFuture;
 
+import javax.imageio.ImageIO;
 import javax.servlet.http.HttpSessionListener;
 import javax.swing.JColorChooser;
 
@@ -83,6 +87,17 @@ public class App extends PApplet {
 			param = increaseMaxIterParam(param, 0.5d);
 			System.out.println("-: max_iterations = " + param.max_iteration);
 			frac.run(param);			
+		}
+		if (event.getKey() == 's') {
+			try {
+			    // retrieve image
+			    BufferedImage bi = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_ARGB);
+			    bi.setRGB(0, 0, WIDTH, HEIGHT, pixels, 0, WIDTH);
+			    File outputfile = new File("saved.png");
+			    ImageIO.write(bi, "png", outputfile);
+			} catch (IOException e) {
+			    e.printStackTrace();
+			}		
 		}
 		super.keyPressed(event);
 	}

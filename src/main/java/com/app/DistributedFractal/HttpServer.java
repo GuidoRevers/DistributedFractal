@@ -6,7 +6,10 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.net.InetAddress;
+import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.stream.Collectors;
 
 import io.undertow.Undertow;
@@ -39,6 +42,9 @@ public class HttpServer {
 					} else if ("/js/worker.js".equals(path)) {
 						exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/html");
 						exchange.getResponseSender().send(worker, Charset.forName("UTF-8"));
+					} else if ("/saved.png".equals(path)) {
+							exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "image/png");
+							exchange.getResponseSender().send(ByteBuffer.wrap(Files.readAllBytes(Paths.get("saved.png"))));
 					} else {
 						exchange.setStatusCode(404);
 						exchange.getResponseSender().send("not Found");

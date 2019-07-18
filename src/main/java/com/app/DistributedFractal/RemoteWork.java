@@ -22,7 +22,7 @@ import processing.data.JSONArray;
 import processing.data.JSONObject;
 
 public class RemoteWork implements FractlWorker {
-	public static final int MAX_JOBS_PER_WORKER = 32;
+	public static final int MAX_JOBS_PER_WORKER = 16;
 
 	final Lock lock = new ReentrantLock();
 	final Condition notEmpty = lock.newCondition();
