@@ -1,0 +1,3 @@
+[submodule "src/main/java/com/app/DistributedFractal/js/lib/decimal"]
+	path = src/main/java/com/app/DistributedFractal/js/lib/decimal
+	url = https://github.com/MikeMcl/decimal.js.git
