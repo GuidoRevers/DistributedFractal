@@ -5,7 +5,7 @@
 console.log("scripts.js");
 
 let numWorker = 0;
-let maxWorker = 8;
+let maxWorker = 16;
 let workers = [];
 let jobs = [];
 let reload = false;

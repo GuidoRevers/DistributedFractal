@@ -13,16 +13,17 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import javax.sound.midi.SysexMessage;
-
 import org.java_websocket.WebSocket;
+import org.java_websocket.exceptions.WebsocketNotConnectedException;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
 
 import processing.data.JSONArray;
 import processing.data.JSONObject;
 
-public class RemoteWork implements FractlWorker{
+public class RemoteWork implements FractlWorker {
+	public static final int MAX_JOBS_PER_WORKER = 32;
+
 	final Lock lock = new ReentrantLock();
 	final Condition notEmpty = lock.newCondition();
 
@@ -31,7 +32,7 @@ public class RemoteWork implements FractlWorker{
 	private Hashtable<Long, Job> runningJobs = new Hashtable<Long, RemoteWork.Job>();
 	private Hashtable<WebSocket, HashSet<Job>> worker = new Hashtable<WebSocket, HashSet<Job>>();
 	private LinkedBlockingQueue<WebSocket> freeWorker = new LinkedBlockingQueue<WebSocket>();
-	
+
 	public RemoteWork() {
 		try {
 			new HttpServer(80);
@@ -55,7 +56,7 @@ public class RemoteWork implements FractlWorker{
 				try {
 					worker.put(conn, new HashSet<RemoteWork.Job>());
 					freeWorker.add(conn);
-					notEmpty.signalAll();				
+					notEmpty.signalAll();
 				} finally {
 					lock.unlock();
 				}
@@ -70,8 +71,8 @@ public class RemoteWork implements FractlWorker{
 					JSONObject job = data.getJSONObject("data");
 					long id = Integer.parseInt(job.getString("id"));
 					JSONArray result = job.getJSONArray("result");
-					
-					completeJob(conn, id, result);					
+
+					completeJob(conn, id, result);
 				}
 
 			}
@@ -86,7 +87,7 @@ public class RemoteWork implements FractlWorker{
 			@Override
 			public void onClose(WebSocket conn, int code, String reason, boolean remote) {
 				System.out.println("close");
-
+				removeWorker(conn);
 			}
 
 		};
@@ -98,12 +99,20 @@ public class RemoteWork implements FractlWorker{
 				try {
 					while (!isInterrupted()) {
 						Job job = jobs.take();
+						WebSocket ws = freeWorker.take();
 						lock.lock();
 						try {
-							WebSocket ws = get();	
-							sendJob(ws, lineJob(job));
-							worker.get(ws).add(job);
-							runningJobs.put(job.id, job);
+							try {
+								sendJob(ws, lineJob(job));
+								runningJobs.put(job.id, job);
+								HashSet<Job> wj = worker.get(ws);
+								wj.add(job);
+								if (wj.size() < MAX_JOBS_PER_WORKER) {
+									freeWorker.offer(ws);
+								}
+							} catch (WebsocketNotConnectedException e) {
+								e.printStackTrace();
+							}
 						} finally {
 							lock.unlock();
 						}
@@ -117,7 +126,19 @@ public class RemoteWork implements FractlWorker{
 		sender.start();
 	}
 
-	public WebSocket get() throws InterruptedException {
+	private void removeWorker(WebSocket ws) {
+		lock.lock();
+		try {
+			HashSet<Job> wJobs = worker.remove(ws);
+			jobs.addAll(wJobs);
+			wJobs.clear();
+			freeWorker.remove(ws);
+		} finally {
+			lock.unlock();
+		}
+	}
+
+	private WebSocket get() throws InterruptedException {
 		lock.lock();
 		try {
 			while (worker.size() == 0)
@@ -127,13 +148,19 @@ public class RemoteWork implements FractlWorker{
 			lock.unlock();
 		}
 	}
-	
+
 	private void completeJob(WebSocket ws, long id, JSONArray result) {
 		lock.lock();
-		try {						
+		try {
 			Job job = runningJobs.remove(id);
+			if (worker.get(ws).size() == MAX_JOBS_PER_WORKER) {
+				freeWorker.offer(ws);
+			}
 			boolean noError = worker.get(ws).remove(job);
-			if (!noError) throw new RuntimeException();
+			if (!noError)
+				throw new RuntimeException();
+			
+			
 			int pos = job.line * job.param.width;
 			for (int i = 0; i < result.size(); i++) {
 				job.param.IterationCounts[pos++] = result.getDouble(i);
@@ -142,11 +169,12 @@ public class RemoteWork implements FractlWorker{
 		} finally {
 			lock.unlock();
 		}
+		//		
 	}
-	
+
 	public CompletableFuture<Void> run(Param param) {
-		System.out.println("RemoteWorker.run(): param="+param.toString());
-		//TODO: supply parm async 
+		System.out.println("RemoteWorker.run(): param=" + param.toString());
+		// TODO: supply parm async
 		return CompletableFuture.runAsync(() -> {
 			LinkedList<CompletableFuture<Void>> list = new LinkedList<CompletableFuture<Void>>();
 
@@ -185,9 +213,7 @@ public class RemoteWork implements FractlWorker{
 //				});
 	}
 
-
-
-	private void sendJob(WebSocket ws, JSONObject job) {
+	private void sendJob(WebSocket ws, JSONObject job) throws WebsocketNotConnectedException {
 		JSONObject data = new JSONObject();
 		data.setString("type", "job");
 		data.setJSONObject("data", job);
@@ -195,8 +221,8 @@ public class RemoteWork implements FractlWorker{
 	}
 
 	private JSONObject lineJob(Job job) {
-		JSONObject data = new JSONObject(); 
-		data.setJSONObject("param", toJSON(job.param));		
+		JSONObject data = new JSONObject();
+		data.setJSONObject("param", toJSON(job.param));
 		data.setString("line", String.valueOf(job.line));
 		data.setString("id", String.valueOf(job.id));
 		return data;
@@ -214,12 +240,14 @@ public class RemoteWork implements FractlWorker{
 		return jObj;
 	}
 
-	private final static AtomicLong idGen = new AtomicLong(); 
+	private final static AtomicLong idGen = new AtomicLong();
+
 	class Job extends CompletableFuture<Void> {
-		
+
 		private final Param param;
 		private final int line;
-		private final long id = idGen.getAndIncrement(); 
+		private final long id = idGen.getAndIncrement();
+
 		public Job(Param param, int line) {
 			this.param = param;
 			this.line = line;
