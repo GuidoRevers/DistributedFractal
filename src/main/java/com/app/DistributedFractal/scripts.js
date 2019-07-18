@@ -48,6 +48,8 @@ function connect() {
 connect();
 let reconnectTimeout = null;
 function reconnectReload() {
+	jobs.length = 0;
+	
 	if (reconnectTimeout) {
 		clearTimeout(reconnectTimeout);
 		reconnectTimeout=null;

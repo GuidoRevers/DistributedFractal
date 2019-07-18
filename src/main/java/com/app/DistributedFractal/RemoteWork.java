@@ -2,9 +2,11 @@ package com.app.DistributedFractal;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.LinkedList;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Condition;
@@ -20,14 +22,16 @@ import org.java_websocket.server.WebSocketServer;
 import processing.data.JSONArray;
 import processing.data.JSONObject;
 
-public class RemoteWork {
+public class RemoteWork implements FractlWorker{
 	final Lock lock = new ReentrantLock();
 	final Condition notEmpty = lock.newCondition();
 
 	private WebSocketServer server;
 	private LinkedBlockingQueue<Job> jobs = new LinkedBlockingQueue<RemoteWork.Job>();
-	private Hashtable<Long, Job> working = new Hashtable<Long, RemoteWork.Job>();
-
+	private Hashtable<Long, Job> runningJobs = new Hashtable<Long, RemoteWork.Job>();
+	private Hashtable<WebSocket, HashSet<Job>> worker = new Hashtable<WebSocket, HashSet<Job>>();
+	private LinkedBlockingQueue<WebSocket> freeWorker = new LinkedBlockingQueue<WebSocket>();
+	
 	public RemoteWork() {
 		try {
 			new HttpServer(80);
@@ -48,8 +52,13 @@ public class RemoteWork {
 			public void onOpen(WebSocket conn, ClientHandshake handshake) {
 				System.out.println("Open");
 				lock.lock();
-				notEmpty.signalAll();
-				lock.unlock();
+				try {
+					worker.put(conn, new HashSet<RemoteWork.Job>());
+					freeWorker.add(conn);
+					notEmpty.signalAll();				
+				} finally {
+					lock.unlock();
+				}
 			}
 
 			@Override
@@ -61,7 +70,8 @@ public class RemoteWork {
 					JSONObject job = data.getJSONObject("data");
 					long id = Integer.parseInt(job.getString("id"));
 					JSONArray result = job.getJSONArray("result");
-					completeJob(id, result);					
+					
+					completeJob(conn, id, result);					
 				}
 
 			}
@@ -88,12 +98,15 @@ public class RemoteWork {
 				try {
 					while (!isInterrupted()) {
 						Job job = jobs.take();
-
-						WebSocket ws = get();
-
-						sendJob(ws, lineJob(job));
-
-						working.put(job.id, job);
+						lock.lock();
+						try {
+							WebSocket ws = get();	
+							sendJob(ws, lineJob(job));
+							worker.get(ws).add(job);
+							runningJobs.put(job.id, job);
+						} finally {
+							lock.unlock();
+						}
 					}
 				} catch (InterruptedException e) {
 					// TODO Auto-generated catch block
@@ -104,17 +117,37 @@ public class RemoteWork {
 		sender.start();
 	}
 
-	private void completeJob(long id, JSONArray result) {
-		Job job = working.get(id);
-		int pos = job.line * job.param.width;
-		for (int i = 0; i < result.size(); i++) {
-			job.param.IterationCounts[pos++] = result.getDouble(i);
+	public WebSocket get() throws InterruptedException {
+		lock.lock();
+		try {
+			while (worker.size() == 0)
+				notEmpty.await();
+			return worker.keySet().iterator().next();
+		} finally {
+			lock.unlock();
 		}
-		job.complete(null);
 	}
 	
-	public void run(Param param) {
-		CompletableFuture.runAsync(() -> {
+	private void completeJob(WebSocket ws, long id, JSONArray result) {
+		lock.lock();
+		try {						
+			Job job = runningJobs.remove(id);
+			boolean noError = worker.get(ws).remove(job);
+			if (!noError) throw new RuntimeException();
+			int pos = job.line * job.param.width;
+			for (int i = 0; i < result.size(); i++) {
+				job.param.IterationCounts[pos++] = result.getDouble(i);
+			}
+			job.complete(null);
+		} finally {
+			lock.unlock();
+		}
+	}
+	
+	public CompletableFuture<Void> run(Param param) {
+		System.out.println("RemoteWorker.run(): param="+param.toString());
+		//TODO: supply parm async 
+		return CompletableFuture.runAsync(() -> {
 			LinkedList<CompletableFuture<Void>> list = new LinkedList<CompletableFuture<Void>>();
 
 			System.out.println("Start.");
@@ -123,11 +156,16 @@ public class RemoteWork {
 				list.add(line(param, py));
 			}
 			CompletableFuture<Void>[] test = list.toArray(new CompletableFuture[list.size()]);
-			CompletableFuture.allOf(test).thenRun(() -> {
+			try {
+				CompletableFuture.allOf(test).thenRun(() -> {
 
-				System.out.println("Done!");
-				System.out.println("Time: " + (System.currentTimeMillis() - time1));
-			});
+					System.out.println("Done!");
+					System.out.println("Time: " + (System.currentTimeMillis() - time1));
+				}).get();
+			} catch (InterruptedException | ExecutionException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 		});
 	}
 
@@ -147,16 +185,7 @@ public class RemoteWork {
 //				});
 	}
 
-	public WebSocket get() throws InterruptedException {
-		lock.lock();
-		try {
-			while (server.getConnections().size() == 0)
-				notEmpty.await();
-			return server.getConnections().iterator().next();
-		} finally {
-			lock.unlock();
-		}
-	}
+
 
 	private void sendJob(WebSocket ws, JSONObject job) {
 		JSONObject data = new JSONObject();

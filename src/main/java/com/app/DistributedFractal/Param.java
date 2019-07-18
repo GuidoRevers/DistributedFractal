@@ -24,4 +24,17 @@ public class Param {
 
 	}
 
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		sb.append(width); sb.append(" ");
+		sb.append(height); sb.append(" ");
+		sb.append(dx1); sb.append(" ");
+		sb.append(dx2); sb.append(" ");
+		sb.append(dy1); sb.append(" ");
+		sb.append(dy2); sb.append(" ");
+		sb.append(max_iteration); sb.append(" ");
+		
+		return sb.toString();
+	}
 }

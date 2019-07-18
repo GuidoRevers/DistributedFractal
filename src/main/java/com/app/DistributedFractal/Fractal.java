@@ -78,6 +78,10 @@ public class Fractal {
 		return hue;
 	}
 	
+	public static double[] postHistogramHueLookup_(Param param) {
+		return postHistogramHueLookup_(param, new double[param.max_iteration + 1]);
+	}
+	
 	public static double[] postHistogramHueLookup_(Param param, double[] output) {
 		Arrays.fill(output,0);
 
