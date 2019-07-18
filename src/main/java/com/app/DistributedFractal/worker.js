@@ -1,6 +1,7 @@
 /**
  * 
  */
+importScripts("/js/lib/decimal/decimal.js");
 
 onmessage = function(e) {
 	let job = e.data;

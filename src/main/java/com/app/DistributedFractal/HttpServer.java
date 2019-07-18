@@ -23,11 +23,13 @@ public class HttpServer {
 
 		try (InputStream stream = HttpServer.class.getResourceAsStream("index.html");
 				InputStream stream_script = HttpServer.class.getResourceAsStream("scripts.js");
-				InputStream stream_worker = HttpServer.class.getResourceAsStream("worker.js")
+				InputStream stream_worker = HttpServer.class.getResourceAsStream("worker.js");
+				InputStream stream_decimal = HttpServer.class.getResourceAsStream("js/lib/decimal/decimal.js");
 				) {			
 			String index = inToString(stream, "UTF-8");
 			String scripts = inToString(stream_script, "UTF-8");
 			String worker = inToString(stream_worker, "UTF-8");
+			String decimal = inToString(stream_decimal, "UTF-8");
 			Undertow server = Undertow.builder().addHttpListener(port, InetAddress.getLocalHost().getHostAddress()).setHandler(new HttpHandler() {
 				@Override
 				public void handleRequest(final HttpServerExchange exchange) throws Exception {
@@ -40,8 +42,11 @@ public class HttpServer {
 							exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/html");
 							exchange.getResponseSender().send(scripts, Charset.forName("UTF-8"));
 					} else if ("/js/worker.js".equals(path)) {
-						exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/html");
+						exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/javascript");
 						exchange.getResponseSender().send(worker, Charset.forName("UTF-8"));
+					} else if ("/js/lib/decimal/decimal.js".equals(path)) {
+						exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/javascript");
+						exchange.getResponseSender().send(decimal, Charset.forName("UTF-8"));
 					} else if ("/saved.png".equals(path)) {
 							exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "image/png");
 							exchange.getResponseSender().send(ByteBuffer.wrap(Files.readAllBytes(Paths.get("saved.png"))));
