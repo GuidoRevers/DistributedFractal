@@ -8,7 +8,12 @@ onmessage = function(e) {
 	let job = e.data;
 	postMessage(["Job start: " + job.id]);
 	let ms = new Date().getTime();
-	let result = lineJob(job);
+	let result;
+	if (job.param.mode == 0) {
+		result = lineJob(job);
+	} else {
+		result = bigLineJob(job);
+	}
 	job.time =  new Date().getTime() - ms;
 	postMessage([job,result]);
 	postMessage(["Job end: " + job.id + " Time:" + job.time + "ms"]);

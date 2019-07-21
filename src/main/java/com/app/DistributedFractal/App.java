@@ -53,6 +53,11 @@ public class App extends PApplet {
 	
 
 	public void draw() {
+		//**********keyPressed after start BugFix*********
+		if (millis() < 1000)
+            ((java.awt.Canvas) surface.getNative()).requestFocus();
+		//************************************************
+		
 //		loadPixels();
 
 		double[] table = Fractal.postHistogramHueLookup_(param);
@@ -98,6 +103,12 @@ public class App extends PApplet {
 		}
 		if (event.getKey() == 's') {
 			save();
+		}
+		
+		if (event.getKey() == 'm') {
+			param = swapModeParam(param);
+			System.out.println("mode = " + param.mode);
+			frac.run(param);	
 		}
 		if (event.getKey() == 'l') {
 			try {
@@ -165,11 +176,14 @@ public class App extends PApplet {
 		y2 = y + yh * zoom;
 
 		return new Param(new double[param.IterationCounts.length], param.width, param.height, x1, x2, y1, y2,
-				param.max_iteration);
+				param.max_iteration, param.mode);
 	}
 	
 	private Param increaseMaxIterParam(Param param, Double mult) {
-		return new Param(new double[param.IterationCounts.length], param.width, param.height, param.dx1, param.dx2, param.dy1, param.dy2, (int) (param.max_iteration * mult));
+		return new Param(new double[param.IterationCounts.length], param.width, param.height, param.dx1, param.dx2, param.dy1, param.dy2, (int) (param.max_iteration * mult), param.mode);
+	}
+	private Param swapModeParam(Param param) {
+		return new Param(new double[param.IterationCounts.length], param.width, param.height, param.dx1, param.dx2, param.dy1, param.dy2, param.max_iteration, param.mode == 0 ? 1 : 0);
 	}
 
 }

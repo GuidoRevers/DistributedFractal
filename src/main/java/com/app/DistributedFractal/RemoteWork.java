@@ -30,8 +30,8 @@ public class RemoteWork implements FractlWorker {
 	private WebSocketServer server;
 	private LinkedBlockingQueue<Job> jobs = new LinkedBlockingQueue<RemoteWork.Job>();
 	private Hashtable<Long, Job> runningJobs = new Hashtable<Long, RemoteWork.Job>();
-	private Hashtable<WebSocket, HashSet<Job>> worker = new Hashtable<WebSocket, HashSet<Job>>();
-	private LinkedBlockingQueue<WebSocket> freeWorker = new LinkedBlockingQueue<WebSocket>();
+	private Hashtable<WebSocket, Worker> connectedWorker = new Hashtable<WebSocket, RemoteWork.Worker>();
+	private LinkedBlockingQueue<Worker> freeWorker = new LinkedBlockingQueue<Worker>();
 
 	public RemoteWork() {
 		try {
@@ -54,8 +54,9 @@ public class RemoteWork implements FractlWorker {
 				System.out.println("Open");
 				lock.lock();
 				try {
-					worker.put(conn, new HashSet<RemoteWork.Job>());
-					freeWorker.add(conn);
+					Worker newWorker = new Worker(conn);
+					connectedWorker.put(conn, newWorker);
+					freeWorker.add(newWorker);
 					notEmpty.signalAll();
 				} finally {
 					lock.unlock();
@@ -100,16 +101,16 @@ public class RemoteWork implements FractlWorker {
 					while (!isInterrupted()) {
 //						System.out.println(jobs.size() + " " + freeWorker.size());
 						Job job = jobs.take();
-						WebSocket ws = freeWorker.take();
+						Worker w = freeWorker.take();
 						lock.lock();
 						try {
 							try {
-								sendJob(ws, lineJob(job));
+								sendJob(w, lineJob(job));
 								runningJobs.put(job.id, job);
-								HashSet<Job> wj = worker.get(ws);
-								wj.add(job);
-								if (wj.size() < MAX_JOBS_PER_WORKER) {
-									freeWorker.offer(ws);
+								w.add(job);
+								
+								if (!w.isFull()) {
+									freeWorker.offer(w);
 								}
 							} catch (WebsocketNotConnectedException e) {
 								//TODO: put job back? anything else?
@@ -132,34 +133,34 @@ public class RemoteWork implements FractlWorker {
 	private void removeWorker(WebSocket ws) {
 		lock.lock();
 		try {
-			HashSet<Job> wJobs = worker.remove(ws);
-			jobs.addAll(wJobs);
-			wJobs.clear();
+			Worker worker = connectedWorker.remove(ws);
+			worker.clear();
 			freeWorker.remove(ws);
 		} finally {
 			lock.unlock();
 		}
 	}
 
-	private WebSocket get() throws InterruptedException {
-		lock.lock();
-		try {
-			while (worker.size() == 0)
-				notEmpty.await();
-			return worker.keySet().iterator().next();
-		} finally {
-			lock.unlock();
-		}
-	}
+//	private WebSocket get() throws InterruptedException {
+//		lock.lock();
+//		try {
+//			while (worker.size() == 0)
+//				notEmpty.await();
+//			return worker.keySet().iterator().next();
+//		} finally {
+//			lock.unlock();
+//		}
+//	}
 
 	private void completeJob(WebSocket ws, long id, JSONArray result) {
 		lock.lock();
 		try {
+			Worker worker = connectedWorker.get(ws);
 			Job job = runningJobs.remove(id);
-			if (worker.get(ws).size() == MAX_JOBS_PER_WORKER) {
-				freeWorker.offer(ws);
+			if (worker.queueSize() == MAX_JOBS_PER_WORKER) {
+				freeWorker.offer(worker);
 			}
-			boolean noError = worker.get(ws).remove(job);
+			boolean noError = worker.remove(job);
 			if (!noError)
 				throw new RuntimeException();
 			
@@ -240,11 +241,11 @@ public class RemoteWork implements FractlWorker {
 		return job;
 	}
 	
-	private void sendJob(WebSocket ws, JSONObject job) throws WebsocketNotConnectedException {
+	private void sendJob(Worker w, JSONObject job) throws WebsocketNotConnectedException {
 		JSONObject data = new JSONObject();
 		data.setString("type", "job");
 		data.setJSONObject("data", job);
-		ws.send(data.toString());
+		w.send(data.toString());
 	}
 
 	private JSONObject lineJob(Job job) {
@@ -265,6 +266,7 @@ public class RemoteWork implements FractlWorker {
 		jObj.setString("width", String.valueOf(param.width));
 		jObj.setString("height", String.valueOf(param.height));
 		jObj.setString("max_iteration", String.valueOf(param.max_iteration));
+		jObj.setString("mode", String.valueOf(param.mode));
 		return jObj;
 	}
 
@@ -281,6 +283,34 @@ public class RemoteWork implements FractlWorker {
 			this.param = param;
 			this.offset = offset;
 			this.length = length;
+		}
+	}
+	
+	class Worker {
+		final WebSocket ws;
+		final HashSet<RemoteWork.Job> working = new HashSet<RemoteWork.Job>();
+		public Worker(WebSocket ws) {
+			super();
+			this.ws = ws;
+		}
+		public void clear() {
+			jobs.addAll(working);
+			working.clear();			
+		}
+		public boolean remove(Job job) {
+			return working.remove(job);			
+		}
+		public int queueSize() {
+			return working.size();
+		}
+		public boolean isFull() {
+			return working.size() >= MAX_JOBS_PER_WORKER;
+		}
+		public void add(Job job) {
+			working.add(job);		
+		}
+		public void send(String string) {
+			ws.send(string);			
 		}
 	}
 }
