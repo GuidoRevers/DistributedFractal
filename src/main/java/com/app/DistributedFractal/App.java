@@ -1,6 +1,10 @@
 package com.app.DistributedFractal;
 
 import java.awt.Color;
+import java.awt.HeadlessException;
+import java.awt.Toolkit;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -26,6 +30,7 @@ public class App extends PApplet {
 	final static int HEIGHT = 600;
 	final static double[] IterationCounts = new double[WIDTH * HEIGHT];
 	static Param param = new Param(IterationCounts, WIDTH, HEIGHT, -2.5d, 1d, -1d, 1d, 100);
+	static int[] _p;
 //	Server server = new Server();
 	// method used only for setting the size of the window
 	final FractlWorker frac = new RemoteWork();
@@ -39,6 +44,7 @@ public class App extends PApplet {
 	public void setup() {
 		frameRate(24);
 		loadPixels();
+		_p = pixels;
 
 //		LocalWork.run(param);
 		frac.run(param);
@@ -67,13 +73,15 @@ public class App extends PApplet {
 	}
 
 	@Override
-	public void mouseClicked(MouseEvent event) {
-		System.out.println("clicked: " + event.getX() + "/" + event.getY());
-		double x = event.getX() * (param.dx2 - param.dx1) / WIDTH + param.dx1;
-		double y = event.getY() * (param.dy2 - param.dy1) / HEIGHT + param.dy1;
-		param = zoomParam(param, 0.5d, x, y);
-		frac.run(param);
-		super.mouseClicked(event);
+	public void mouseClicked(MouseEvent event) {		
+		if (event.getButton() == LEFT) {
+			System.out.println("clicked: " + event.getX() + "/" + event.getY());
+			double x = event.getX() * (param.dx2 - param.dx1) / WIDTH + param.dx1;
+			double y = event.getY() * (param.dy2 - param.dy1) / HEIGHT + param.dy1;
+			param = zoomParam(param, 0.5d, x, y);
+			frac.run(param);
+			super.mouseClicked(event);
+		}
 	}
 
 	@Override
@@ -89,17 +97,46 @@ public class App extends PApplet {
 			frac.run(param);			
 		}
 		if (event.getKey() == 's') {
+			save();
+		}
+		if (event.getKey() == 'l') {
 			try {
-			    // retrieve image
-			    BufferedImage bi = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_ARGB);
-			    bi.setRGB(0, 0, WIDTH, HEIGHT, pixels, 0, WIDTH);
-			    File outputfile = new File("saved.png");
-			    ImageIO.write(bi, "png", outputfile);
+				String data = (String) Toolkit.getDefaultToolkit().getSystemClipboard().getData(DataFlavor.stringFlavor);
+				String[] split = data.trim().split(" ");
+				param = new Param(new double[param.IterationCounts.length],
+						Integer.parseInt(split[0]),
+						Integer.parseInt(split[1]),
+						Double.parseDouble(split[2]),
+						Double.parseDouble(split[3]),
+						Double.parseDouble(split[4]),
+						Double.parseDouble(split[5]),
+						Integer.parseInt(split[6]));
+				frac.run(param);
+			} catch (HeadlessException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (UnsupportedFlavorException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
 			} catch (IOException e) {
-			    e.printStackTrace();
-			}		
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} 
 		}
 		super.keyPressed(event);
+	}
+
+	public static void save() {
+		try {
+		    // retrieve image
+		    BufferedImage bi = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_ARGB);
+		    bi.setRGB(0, 0, WIDTH, HEIGHT, _p, 0, WIDTH);
+		    File outputfile = new File("saved.png");
+		    ImageIO.write(bi, "png", outputfile);
+		} catch (IOException e) {
+		    e.printStackTrace();
+		}	
+		
 	}
 
 	public static void main(String[] args) {

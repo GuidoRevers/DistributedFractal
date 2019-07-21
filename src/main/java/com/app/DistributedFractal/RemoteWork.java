@@ -98,6 +98,7 @@ public class RemoteWork implements FractlWorker {
 			public void run() {
 				try {
 					while (!isInterrupted()) {
+//						System.out.println(jobs.size() + " " + freeWorker.size());
 						Job job = jobs.take();
 						WebSocket ws = freeWorker.take();
 						lock.lock();
@@ -111,6 +112,8 @@ public class RemoteWork implements FractlWorker {
 									freeWorker.offer(ws);
 								}
 							} catch (WebsocketNotConnectedException e) {
+								//TODO: put job back? anything else?
+								jobs.offer(job);
 								e.printStackTrace();
 							}
 						} finally {
@@ -161,8 +164,8 @@ public class RemoteWork implements FractlWorker {
 				throw new RuntimeException();
 			
 			
-			int pos = job.line * job.param.width;
-			for (int i = 0; i < result.size(); i++) {
+			int pos = job.offset;
+			for (int i = 0; i < job.length; i++) {
 				job.param.IterationCounts[pos++] = result.getDouble(i);
 			}
 			job.complete(null);
@@ -181,8 +184,11 @@ public class RemoteWork implements FractlWorker {
 			System.out.println("Start.");
 			long time1 = System.currentTimeMillis();
 			for (int py = 0; py < param.height; py++) {
-				list.add(line(param, py));
+				list.add(halfLine(param, py));
 			}
+//			for (int i = 0; i < param.width * param.height; i++) {
+//				list.add(pixel(param, i));
+//			}
 			CompletableFuture<Void>[] test = list.toArray(new CompletableFuture[list.size()]);
 			try {
 				CompletableFuture.allOf(test).thenRun(() -> {
@@ -196,9 +202,14 @@ public class RemoteWork implements FractlWorker {
 			}
 		});
 	}
-
+	private CompletableFuture<Void> pixel(Param _param, int p) {
+		Job job = new Job(_param,p , 1);
+		jobs.offer(job);
+		return job;
+	}
+	
 	private CompletableFuture<Void> line(Param _param, int _py) {
-		Job job = new Job(_param, _py);
+		Job job = new Job(_param, _py * _param.width, _param.width);
 		jobs.offer(job);
 		return job;
 
@@ -213,6 +224,22 @@ public class RemoteWork implements FractlWorker {
 //				});
 	}
 
+	private CompletableFuture<Void> halfLine(Param _param, int _py) {
+		Job job = new Job(_param, _py * _param.width, _param.width / 2);
+		jobs.offer(job);
+		job = new Job(_param, _py * _param.width + _param.width / 2, _param.width / 2);
+		jobs.offer(job);
+		return job;
+	}
+	
+	private CompletableFuture<Void> doubleLine(Param _param, int _py) {
+		int remaining = _param.width * _param.height - _py * _param.width;
+		int len = Math.min(_param.width * 2, remaining); 
+		Job job = new Job(_param, _py * _param.width, len);
+		jobs.offer(job);
+		return job;
+	}
+	
 	private void sendJob(WebSocket ws, JSONObject job) throws WebsocketNotConnectedException {
 		JSONObject data = new JSONObject();
 		data.setString("type", "job");
@@ -223,7 +250,8 @@ public class RemoteWork implements FractlWorker {
 	private JSONObject lineJob(Job job) {
 		JSONObject data = new JSONObject();
 		data.setJSONObject("param", toJSON(job.param));
-		data.setString("line", String.valueOf(job.line));
+		data.setString("offset", String.valueOf(job.offset));
+		data.setString("length", String.valueOf(job.length));
 		data.setString("id", String.valueOf(job.id));
 		return data;
 	}
@@ -245,12 +273,14 @@ public class RemoteWork implements FractlWorker {
 	class Job extends CompletableFuture<Void> {
 
 		private final Param param;
-		private final int line;
+		private final int offset;
+		private final int length;
 		private final long id = idGen.getAndIncrement();
 
-		public Job(Param param, int line) {
+		public Job(Param param, int offset, int length) {
 			this.param = param;
-			this.line = line;
+			this.offset = offset;
+			this.length = length;
 		}
 	}
 }

@@ -49,6 +49,7 @@ public class HttpServer {
 						exchange.getResponseSender().send(decimal, Charset.forName("UTF-8"));
 					} else if ("/saved.png".equals(path)) {
 							exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "image/png");
+							App.save();
 							exchange.getResponseSender().send(ByteBuffer.wrap(Files.readAllBytes(Paths.get("saved.png"))));
 					} else {
 						exchange.setStatusCode(404);
