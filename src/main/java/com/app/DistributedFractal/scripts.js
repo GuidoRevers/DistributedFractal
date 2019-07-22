@@ -153,41 +153,89 @@ function finishJob(worker, job, result) {
 	showResult(job, result);
 }
 
-function showResult(job, result) {
-	let canvas = getCanvas();
-	
-	if(canvas.getContext){
-        var ctx = canvas.getContext('2d');
-//        var imageData = ctx.getImageData(0,Number(job.line),Number(job.param.width),1);
-        let resWidth = Number(job.param.width);
-        let resHeight = Number(job.param.height);
-        let resOffset = Number(job.offset);
-        let dWidth = Math.ceil(Number(job.length) * canvas.width / resWidth);
-        var imageData = ctx.createImageData(dWidth,1);
-        let data = imageData.data;
-        let max_iteration = Number(job.param.max_iteration);
+var canvas = getCanvas();
+var ctx = canvas.getContext('2d');
+var imageData = ctx.createImageData(canvas.width,canvas.height);
 
-        let count = 0;
-//        count / data.length * resWidth
+function showResult(job, result) {
+	
         
-        for (var i = 0; i < data.length; i += 4) {        	
+//        var imageData = ctx.getImageData(0,Number(job.line),Number(job.param.width),1);
+    let resWidth = Number(job.param.width);
+    let resHeight = Number(job.param.height);
+    let resOffset = Number(job.offset);
+    let resLength = Number(job.length);
+    
+    let resSize = (resWidth * resHeight);
+    let dSize = (canvas.width * canvas.height);
+    
+    let dOffset = Math.floor(resOffset  * dSize / resSize) - 1;
+    let dLength = Math.ceil(resLength * dSize / resSize) + 1;
+//    let dWidth = Math.ceil(Number(job.length) * canvas.width / resWidth);
+    
+    let data = imageData.data;
+    let max_iteration = Number(job.param.max_iteration);
+    
+//    let count = 0;
+//        count / data.length * resWidth
+
+    for (var i = 0; i < resLength; i++) {        	
 //            var avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
 //        	console.log(count / canvas.width * resWidth);
-        	var avg = result[count * resWidth / canvas.width ] / max_iteration * 255;
-            data[i]     = avg; // red
-            data[i + 1] = avg; // green
-            data[i + 2] = avg; // blue
-            data[i + 3] = 255; // alpha
-            count++;
-          }        
-    
-        ctx.putImageData(imageData,
-        		resOffset % resWidth * canvas.width / resWidth,
-        		Math.floor(Math.floor(resOffset / resWidth) * canvas.height / resHeight ),
-        		0,0,dWidth,1);
-//        ctx.putImageData(imageData, 0, 150);
-    }
-	
+    	
+    	var avg = result[i] / max_iteration * 255;
+    	
+    	let x = (resOffset + i) % resWidth;
+    	let y = Math.floor((resOffset + i) / resWidth);  
+    	let cX = x   * canvas.width / resWidth;
+    	let cY =  Math.floor(y    * canvas.height / resHeight);
+    	let pos = Math.floor(cY * canvas.width + cX);
+//    	pos = Math.floor(pos / 4) * 4 * 4;
+    	pos *=4;
+//    	console.log(x + " " + y + " <=> " + cX + " " + cY + " = " + pos); 
+//    	console.log(pos);
+    	
+//    	console.log(avg);
+//    	var avg = result[count  * resSize / dSize] / max_iteration * 255;
+        data[pos ]     = avg; // red
+        data[pos + 1] = avg; // green
+        data[pos + 2] = avg; // blue
+        data[pos + 3] = 255; // alpha
+//        count++;
+      }        
+
+    putImageData(imageData, dOffset, dLength);
+}
+
+function putImageDataPixel(imageData, offset, length) {
+	let count = 0;
+	let x = offset % canvas.width;
+	for(let y = Math.floor(offset / canvas.width); y < canvas.height; y++) {
+		for (; x < canvas.width; x++) {
+			ctx.putImageData(imageData, 0, 0, x, y,1 , 1)
+			count++;
+			if (count >= length) {
+				return;
+			}
+		}
+		x = 0;		
+	}
+}
+
+function putImageData(imageData, offset, length) {
+	let x = offset % canvas.width;
+	for(let y = Math.floor(offset / canvas.width); y < canvas.height; y++) {
+		let width = canvas.width - x;
+		length -= width;
+		if (length <= 0) {
+			width = width + length;
+		}
+		ctx.putImageData(imageData, 0, 0, x, y,width , 1)
+		if (length <= 0) {
+			return;
+		}
+		x = 0;		
+	}
 }
 
 function getCanvas() {

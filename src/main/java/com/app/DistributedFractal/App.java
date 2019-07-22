@@ -33,7 +33,7 @@ public class App extends PApplet {
 	static int[] _p;
 //	Server server = new Server();
 	// method used only for setting the size of the window
-	final FractlWorker frac = new RemoteWork();
+	final FractlWorker frac = new DynamicRemoteWork();
 
 	public void settings() {
 
