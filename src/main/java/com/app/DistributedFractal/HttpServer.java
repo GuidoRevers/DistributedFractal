@@ -19,7 +19,7 @@ import io.undertow.util.Headers;
 
 public class HttpServer {
 
-	public HttpServer(int port) throws IOException {
+	public HttpServer(int port, String host) throws IOException {
 
 		try (InputStream stream = HttpServer.class.getResourceAsStream("index.html");
 				InputStream stream_script = HttpServer.class.getResourceAsStream("scripts.js");
@@ -30,7 +30,7 @@ public class HttpServer {
 			String scripts = inToString(stream_script, "UTF-8");
 			String worker = inToString(stream_worker, "UTF-8");
 			String decimal = inToString(stream_decimal, "UTF-8");
-			Undertow server = Undertow.builder().addHttpListener(port, InetAddress.getLocalHost().getHostAddress()).setHandler(new HttpHandler() {
+			Undertow server = Undertow.builder().addHttpListener(port, host).setHandler(new HttpHandler() {
 				@Override
 				public void handleRequest(final HttpServerExchange exchange) throws Exception {
 

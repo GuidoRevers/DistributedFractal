@@ -8,6 +8,7 @@ import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.net.UnknownHostException;
 import java.util.LinkedList;
 import java.util.concurrent.CompletableFuture;
 
@@ -33,10 +34,16 @@ public class App extends PApplet {
 	static int[] _p;
 //	Server server = new Server();
 	// method used only for setting the size of the window
-	final FractlWorker frac = new DynamicRemoteWork();
+	final FractlWorker frac;
 
+	public App() throws UnknownHostException {
+		super();
+		frac = new DynamicRemoteWork();
+		
+	}
+	
 	public void settings() {
-
+		
 		size(WIDTH, HEIGHT);
 	}
 

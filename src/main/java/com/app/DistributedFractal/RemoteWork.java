@@ -1,6 +1,7 @@
 package com.app.DistributedFractal;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.HashSet;
 import java.util.Hashtable;
@@ -36,7 +37,7 @@ public class RemoteWork implements FractlWorker {
 
 	public RemoteWork() {
 		try {
-			new HttpServer(80);
+			new HttpServer(80,InetAddress.getLocalHost().getHostAddress());
 		} catch (IOException e1) {
 			// TODO Auto-generated catch block
 			e1.printStackTrace();

@@ -1,32 +1,36 @@
 package com.app.DistributedFractal;
 
+import java.awt.Desktop;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.net.UnknownHostException;
 import java.util.HashSet;
 import java.util.Hashtable;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import javax.sound.midi.SysexMessage;
 
 import org.java_websocket.WebSocket;
 import org.java_websocket.exceptions.WebsocketNotConnectedException;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
 
-import com.sun.xml.internal.ws.util.CompletedFuture;
-
 import processing.data.JSONArray;
 import processing.data.JSONObject;
 
 public class DynamicRemoteWork implements FractlWorker {
+	public static final int PORT = 80;
+	public final String HOST;
 	public static final int MAX_JOBS_PER_WORKER = 16;
 
 	final Lock lock = new ReentrantLock();
@@ -38,9 +42,12 @@ public class DynamicRemoteWork implements FractlWorker {
 	private Hashtable<WebSocket, Worker> connectedWorker = new Hashtable<WebSocket, DynamicRemoteWork.Worker>();
 	private LinkedBlockingQueue<Worker> freeWorker = new LinkedBlockingQueue<Worker>();
 
-	public DynamicRemoteWork() {
+	
+	
+	public DynamicRemoteWork() throws UnknownHostException {
+		HOST = InetAddress.getLocalHost().getHostAddress();
 		try {
-			new HttpServer(80);
+			new HttpServer(PORT, HOST);
 		} catch (IOException e1) {
 			// TODO Auto-generated catch block
 			e1.printStackTrace();
@@ -147,6 +154,12 @@ public class DynamicRemoteWork implements FractlWorker {
 			}
 		};
 		sender.start();
+		try {
+			openWebpage(new URL("http", HOST, PORT,""));
+		} catch (MalformedURLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 
 	private void removeWorker(WebSocket ws) {
@@ -302,4 +315,28 @@ public class DynamicRemoteWork implements FractlWorker {
 			ws.send(string);			
 		}
 	}
+	
+	// @ https://stackoverflow.com/questions/10967451/open-a-link-in-browser-with-java-button
+	public static boolean openWebpage(URI uri) {
+	    Desktop desktop = Desktop.isDesktopSupported() ? Desktop.getDesktop() : null;
+	    if (desktop != null && desktop.isSupported(Desktop.Action.BROWSE)) {
+	        try {
+	            desktop.browse(uri);
+	            return true;
+	        } catch (Exception e) {
+	            e.printStackTrace();
+	        }
+	    }
+	    return false;
+	}
+
+	public static boolean openWebpage(URL url) {
+	    try {
+	        return openWebpage(url.toURI());
+	    } catch (URISyntaxException e) {
+	        e.printStackTrace();
+	    }
+	    return false;
+	}
+	
 }
